@@ -4,8 +4,9 @@ Bot em Python que consulta o **Diário Oficial do Estado do Rio Grande do Norte*
 e envia no Telegram as publicações que parecem ser oportunidades de licitação
 (aviso, edital, pregão, dispensa, chamamento, credenciamento etc.).
 
-Ele foi feito para rodar de graça no **GitHub Actions**, uma vez por dia, sem
-precisar deixar o computador ligado.
+Ele roda no seu computador, **manualmente**, quando você quiser — sem agendador
+e sem dependência de serviços externos. Basta abrir o terminal e executar o
+`bot.py`.
 
 ---
 
@@ -56,8 +57,6 @@ O script `monitor_doe.py` sugerido tem problemas que impedem o funcionamento:
    bot vaza. Aqui o token vai em secrets/`.env`.
 8. **Não verifica `resposta.ok` nem faz retry.** Falhas do Telegram passam
    silenciosamente.
-9. **Workflow desatualizado e sem persistência de estado.** `checkout@v3` e
-   `setup-python@v4` são antigos, e não há commit do estado entre execuções.
 
 A parte aproveitável da sugestão são as **palavras-chave** (software,
 tecnologia da informação etc.). Elas podem ser usadas como filtro de assunto
@@ -78,9 +77,9 @@ licitacoes-rn-bot/
 ├── config.yaml                # consultas e filtros
 ├── requirements.txt
 ├── .env.example               # modelo das variáveis do Telegram
-├── .github/workflows/doe-rn.yml
-├── .state/seen.json           # estado inicial (comitado no repositório)
+├── .state/seen.json           # códigos já notificados (não repete alerta)
 └── tests/
+    ├── test_bot.py            # deduplicação das publicações
     ├── test_doe.py            # cliente da API, rate limit e payload
     └── test_filters.py        # classificação de oportunidades x ruído
 ```
@@ -193,93 +192,55 @@ Se chegar a mensagem `Bot DOE-RN configurado com sucesso`, está pronto.
 
 ---
 
-## 5. Colocar no GitHub Actions (tarefa manual)
+## 5. Rodar manualmente
 
-### 5.1. Criar o repositório
-
-Recomendo um repositório **privado** (o token não vai para o Git, mas é mais
-seguro). No GitHub, crie `licitacoes-rn-bot` sem README.
-
-No terminal:
+O bot é executado por você, quando quiser. O comando habitual é:
 
 ```bash
 cd ~/licitacoes-rn-bot
-git init
-git add .
-git commit -m "Bot de licitações do DOE-RN"
-git branch -M main
-git remote add origin https://github.com/SEU_USUARIO/licitacoes-rn-bot.git
-git push -u origin main
+source .venv/bin/activate
+python bot.py --dias 2
 ```
 
-Se tiver o GitHub CLI autenticado:
+`--dias 2` cobre hoje e ontem (a publicação do DOE costuma sair durante o dia,
+então a janela de 2 dias evita perder nada).
+
+### 5.1. O arquivo de estado
+
+O arquivo `.state/seen.json` guarda os códigos já notificados. Ele é atualizado
+automaticamente a cada execução, então você pode rodar o bot quantas vezes
+quiser no mesmo dia: **as licitações já enviadas não são repetidas**.
+
+Se quiser forçar o reenvio de tudo, apague o arquivo e rode de novo:
 
 ```bash
-gh repo create licitacoes-rn-bot --private --source=. --remote=origin --push
+rm .state/seen.json
+python bot.py --dias 2
 ```
 
-### 5.2. Cadastrar os secrets
+### 5.2. Guardar o código no GitHub (opcional)
 
-No repositório:
+Se quiser apenas um backup do código, faça push normalmente. O repositório
+serve só para versionamento — **não há agendamento nem execução automática**:
 
-1. **Settings** → **Secrets and variables** → **Actions**.
-2. **New repository secret**:
-   - `TELEGRAM_BOT_TOKEN` = token do BotFather
-   - `TELEGRAM_CHAT_ID` = seu chat_id
-   - opcional: `TELEGRAM_THREAD_ID`
-3. Salve.
-
-### 5.3. Rodar manualmente para testar
-
-1. Aba **Actions**.
-2. Selecione **Monitor DOE-RN**.
-3. **Run workflow** → branch `main` → `dias` = `2` → **Run workflow**.
-4. Abra o log e confira se apareceu `Notificada ...` e se a mensagem chegou
-   no Telegram.
-
-### 5.4. Agendar
-
-O workflow já tem:
-
-```yaml
-on:
-  schedule:
-    - cron: "0 11 * * 1-5"
+```bash
+cd ~/licitacoes-rn-bot
+git add -A
+git commit -m "Atualizações do bot"
+git push
 ```
 
-O GitHub usa UTC: **11:00 UTC = 08:00 em America/Sao_Paulo** (UTC-3).
-Isso roda de segunda a sexta.
+> Como o token do Telegram fica no `.env` (que está no `.gitignore`), ele nunca
+> vai para o GitHub. Mesmo assim, prefira manter o repositório privado.
 
-Para mudar o horário, edite `.github/workflows/doe-rn.yml`, faça commit e push.
-Exemplos:
+### 5.3. Como o bot se comporta se algo falhar
 
-| Horário em Brasília | Cron UTC |
-|---|---|
-| 07:00 | `0 10 * * 1-5` |
-| 08:00 | `0 11 * * 1-5` |
-| 09:00 | `0 12 * * 1-5` |
-| Todos os dias 08:00 | `0 11 * * *` |
-
-### 5.5. Estado e notificações repetidas
-
-O arquivo `.state/seen.json` guarda os códigos já notificados. O workflow faz
-commit desse arquivo depois de cada execução, para não repetir a mesma
-licitação no dia seguinte.
-
-O workflow já pede permissão de escrita:
-
-```yaml
-permissions:
-  contents: write
-```
-
-Se o `git push` falhar no Actions, verifique:
-
-- **Settings** → **Actions** → **General** → **Workflow permissions**:
-  marque **Read and write permissions**.
-- Proteção de branch: se `main` estiver protegida contra push direto, o bot
-  não consegue salvar o estado. Nesse caso, remova a proteção ou use um
-  repositório/branch separado só para o estado.
+- A API do DOE-RN pode devolver `429` (limite de 100 requisições por hora). O
+  bot espera e tenta de novo se a espera for curta; se for longa, ele avisa e
+  para, sem travar a execução.
+- Se o Telegram estiver fora do ar, a publicação **não** é marcada como vista,
+  então será reenviada na próxima execução.
+- Se uma busca falhar, as demais continuam e o resultado parcial é processado.
 
 ---
 
@@ -525,17 +486,12 @@ Token inválido. Gere outro no BotFather e atualize o secret/`.env`.
 O `chat_id` está errado ou você não enviou `/start` para o bot. Se for grupo,
 o bot precisa estar no grupo e o `chat_id` é negativo.
 
-### O workflow não roda no horário
+### As mensagens chegam atrasadas ou não chegam
 
-- GitHub Actions só executa `schedule` no branch padrão (`main`).
-- O cron é UTC.
-- Execuções agendadas podem atrasar alguns minutos.
-- Repositórios sem atividade por 60 dias podem ter os workflows agendados
-  desativados; rode manualmente ou faça um commit para reativar.
-
-### O `git push` do estado falha
-
-Veja a seção 5.5 (permissões e proteção de branch).
+- O bot só envia o que for publicado **na janela informada** (`--dias`).
+- Rode com `--dry-run --debug` para ver o que foi encontrado e o que ficou de
+  fora.
+- Confira se o bot ainda está bloqueado na API (erro `429`) e aguarde.
 
 ---
 
@@ -554,18 +510,13 @@ Veja a seção 5.5 (permissões e proteção de branch).
 
 ---
 
-## 11. Checklist manual
+## 11. Checklist
 
 - [ ] Criar o bot no **@BotFather** e copiar o token.
 - [ ] Enviar `/start` para o bot e descobrir o `chat_id`.
 - [ ] Preencher o `.env` com token e chat_id.
 - [ ] Rodar `python bot.py --test-telegram`.
 - [ ] Rodar `python bot.py --dias 2 --dry-run` e conferir a saída.
-- [ ] Criar o repositório no GitHub (privado).
-- [ ] Fazer `git push`.
-- [ ] Cadastrar `TELEGRAM_BOT_TOKEN` e `TELEGRAM_CHAT_ID` nos secrets.
-- [ ] Rodar o workflow manualmente com `dias=2`.
 - [ ] Confirmar a mensagem no Telegram.
 - [ ] Ajustar `config.yaml` (SEAD, termos, limite, PDF).
-- [ ] Confirmar o horário do cron (UTC) e o branch padrão.
-- [ ] Verificar se o workflow consegue fazer push do `.state/seen.json`.
+- [ ] Rodar `python bot.py --dias 2` quando quiser verificar o DOE.

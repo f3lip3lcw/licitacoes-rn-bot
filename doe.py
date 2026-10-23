@@ -83,8 +83,8 @@ class DOEAPI:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.pausa = max(0.0, float(pausa))
-        # Se a API pedir para esperar mais que isso, é melhor abortar a execução
-        # do que deixar o job do GitHub Actions dormindo por quase uma hora.
+        # Se a API pedir para esperar mais que isso, é melhor abortar a
+        # execução do que ficar dormindo por quase uma hora.
         self.max_espera = max(1, int(max_espera))
         self.session = session or requests.Session()
         self.session.headers.update(
