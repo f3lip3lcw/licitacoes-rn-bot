@@ -1,0 +1,90 @@
+# Configuração do monitor de licitações do DOE-RN
+#
+# Diário Oficial do RN: código 121 (DEI/RN)
+# A API usada é a mesma da "Busca Avançada" do portal:
+# https://deirn.sdoe.com.br/diariooficialweb/#/busca-avancada?diario=MTIx
+
+diario:
+  codigo: 121
+  nome: "DOE-RN"
+
+periodo:
+  # Janela padrão quando o bot roda sem --data/--desde/--ate.
+  # 2 = hoje + ontem (evita perder publicação do fim do dia).
+  dias: 2
+
+# Cada item é uma consulta independente. O bot junta os resultados e remove
+# duplicados pelo código da publicação.
+#
+# Foco atual: SEAD (código de categoria 1164), que inclui a Central de
+# Aquisições / Coordenadoria de Compras Governamentais (COMPR/SEAD).
+# O filtro por categoria é feito no servidor, então não precisamos buscar o DOE
+# inteiro e descartar depois.
+#
+# Atenção: a API pública permite 100 requisições por hora. Cada consulta gasta
+# 1 requisição (ou 2, se houver mais de 100 resultados e a paginação for
+# acionada). Mantenha a lista enxuta.
+buscas:
+  - palavras: "licitação"
+    codigoCategoria: 1164
+  - palavras: "pregão eletrônico"
+    codigoCategoria: 1164
+  - palavras: "registro de preços"
+    codigoCategoria: 1164
+  - palavras: "dispensa"
+    codigoCategoria: 1164
+  - palavras: "credenciamento"
+    codigoCategoria: 1164
+  - palavras: "chamamento público"
+    codigoCategoria: 1164
+  - palavras: "coordenadoria de compras"
+    codigoCategoria: 1164
+  - palavras: "concorrência"
+    codigoCategoria: 1164
+
+filtros:
+  # Foco na SEAD. Isso também exclui IPERN/DATANORTE, caso a busca por
+  # categoria os traga; se quiser incluí-los, remova esta linha.
+  categorias_incluir:
+    - "Secretaria de Estado da Administração - SEAD"
+
+  # Por padrão o bot foca no Estado. Para incluir prefeituras/câmaras, rode
+  # com --incluir-municipios ou remova a linha correspondente.
+  categorias_excluir:
+    - "Prefeituras e Câmaras Municipais"
+    - "Publicações Particulares"
+    - "Concurso e Processo Seletivos"
+    - "Concursos e Seleções"
+
+  # Filtros opcionais por conteúdo. Exemplo:
+  # termos_incluir: ["medicamento", "material hospitalar"]
+  # termos_excluir: ["merenda escolar", "publicidade"]
+  #
+  # Se o interesse for tecnologia (como no script antigo), use:
+  # termos_incluir:
+  #   - "software"
+  #   - "tecnologia da informacao"
+  #   - "licenca de uso"
+  #   - "computador"
+  termos_incluir: []
+  termos_excluir: []
+
+telegram:
+  # true = envia o PDF da publicação como documento (quando existir).
+  # Custa chamadas extras à API; com o limite de 100/hora, use com moderação.
+  anexar_pdf: false
+  # true = notificação silenciosa (sem som)
+  silencioso: false
+  # Limite de mensagens por execução, para não floodar o chat.
+  limite_notificacoes: 20
+
+links:
+  # Resolve o link direto da publicação (2 chamadas extras por item).
+  # Desligado por padrão por causa do limite de 100 requisições/hora da API.
+  # Se ligar, o bot respeita max_diretos e cai no link da busca em caso de erro.
+  direto: false
+  max_diretos: 5
+
+estado:
+  arquivo: ".state/seen.json"
+  retencao_dias: 60

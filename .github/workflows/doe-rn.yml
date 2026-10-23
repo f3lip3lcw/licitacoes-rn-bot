@@ -1,0 +1,62 @@
+name: Monitor DOE-RN
+
+on:
+  schedule:
+    # GitHub Actions usa UTC. 11:00 UTC = 08:00 em America/Sao_Paulo (UTC-3).
+    # Segunda a sexta. Ajuste conforme a publicação do DOE-RN.
+    - cron: "0 11 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      dias:
+        description: "Janela de busca em dias (2 = hoje + ontem)"
+        required: false
+        default: "2"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: doe-rn-monitor
+  cancel-in-progress: false
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Rodar o bot
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
+          DIAS: ${{ github.event.inputs.dias || '2' }}
+        run: python bot.py --dias "$DIAS"
+
+      - name: Persistir estado (evita notificações repetidas)
+        if: always()
+        run: |
+          if git diff --quiet -- .state/seen.json; then
+            echo "Sem mudanças no estado."
+            exit 0
+          fi
+
+          git config user.name "doe-rn-bot"
+          git config user.email "doe-rn-bot@users.noreply.github.com"
+          git add .state/seen.json
+          git commit -m "chore: atualiza estado do DOE-RN [skip ci]"
+          git push
