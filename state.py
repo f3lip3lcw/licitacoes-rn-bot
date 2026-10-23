@@ -1,4 +1,4 @@
-"""Estado persistente para não notificar a mesma publicação duas vezes."""
+"""Estado persistente: o que já foi notificado, para não repetir alerta."""
 from __future__ import annotations
 
 import json
@@ -28,7 +28,9 @@ class Estado:
             if not isinstance(dados, dict) or not isinstance(dados.get("seen"), dict):
                 raise ValueError("formato inválido")
             self.dados = dados
-        except Exception as exc:  # noqa: BLE001 - estado corrompido não deve derrubar o bot
+        except (ValueError, OSError) as exc:
+            # Estado corrompido não derruba o bot: recomeça do zero, guardando
+            # o arquivo ruim para investigar depois.
             backup = self.caminho.with_suffix(self.caminho.suffix + ".bak")
             try:
                 self.caminho.replace(backup)
@@ -42,6 +44,7 @@ class Estado:
         self._podar()
 
     def _podar(self) -> None:
+        """Descarta chaves mais velhas que a retenção, para o arquivo não crescer."""
         limite = datetime.now(timezone.utc) - timedelta(days=self.retencao_dias)
         vistos: dict[str, str] = {}
 
@@ -66,6 +69,7 @@ class Estado:
             self.dados["seen"][chave] = agora
 
     def salvar(self) -> None:
+        """Escreve de forma atômica (arquivo temporário + rename)."""
         self.caminho.parent.mkdir(parents=True, exist_ok=True)
         fd, temporario = tempfile.mkstemp(
             prefix=".seen-", suffix=".json", dir=str(self.caminho.parent)

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import sys
 import unittest
 from datetime import date
@@ -8,7 +6,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from doe import DOEAPI, DOEAPIError  # noqa: E402
+from doe import DOEAPI, DOEAPIError
 
 
 class RespostaFalsa:

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import sys
 import unittest
 from datetime import date
@@ -7,9 +5,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from doe import Publicacao  # noqa: E402
-from filters import FiltroConfig, classificar_com_motivo  # noqa: E402
-from utils import extrair_titulo, limpar_html, normalizar  # noqa: E402
+from doe import Publicacao
+from filters import FiltroConfig, classificar_com_motivo
+from utils import extrair_titulo, limpar_html, normalizar
 
 
 def publicacao(

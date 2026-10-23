@@ -1,4 +1,9 @@
-"""Filtros de relevância para separar oportunidades de licitação de ruído."""
+"""Relevância: separa oportunidade de licitação de ruído.
+
+A decisão olha o começo do texto (e do resumo). O corpo fala de tudo — uma IRP
+cita "ata de registro de preços" — então os termos negativos valem só para o
+cabeçalho.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -6,9 +11,7 @@ from dataclasses import dataclass, field
 from doe import Publicacao
 from utils import normalizar
 
-# Termos negativos observados no início das publicações. A ideia é olhar só o
-# começo do texto (cabeçalho), porque o objeto da licitação pode conter palavras
-# como "contratação" sem que a publicação seja um contrato.
+# Cabeçalhos que indicam publicação de resultado/contrato/processo, não abertura.
 NEGATIVOS_CABECALHO = (
     "extrato",
     "termo aditivo",
@@ -44,8 +47,7 @@ NEGATIVOS_CABECALHO = (
     "designacao",
     "nomeacao",
     "exoneracao",
-    # Concursos e seleções de pessoal que às vezes aparecem fora da categoria
-    # "Concurso e Processo Seletivos".
+    # pessoal, que às vezes aparece fora da categoria própria de concursos
     "concurso publico",
     "processo seletivo",
     "selecao de pessoal",
@@ -88,8 +90,7 @@ POSITIVOS_CABECALHO = (
     "convoca",
 )
 
-# Consultas que já são específicas o suficiente. Se o cabeçalho não tiver nem
-# termo positivo nem negativo, aceitamos o resultado dessas buscas.
+# Buscas já específicas o bastante: se o cabeçalho não decidir, aceitamos.
 CONSULTAS_ESPECIFICAS = {
     "aviso de licitacao",
     "aviso de abertura",
@@ -123,7 +124,7 @@ class FiltroConfig:
 def classificar_com_motivo(
     pub: Publicacao, filtro: FiltroConfig
 ) -> tuple[bool, str]:
-    """Devolve (relevante, motivo) para facilitar o modo --debug."""
+    """Devolve (relevante, motivo); o motivo alimenta o --debug."""
     categoria = normalizar(pub.categoria)
 
     if filtro._cat_inc and not any(t in categoria for t in filtro._cat_inc):
@@ -144,15 +145,14 @@ def classificar_com_motivo(
 
     bases = [texto, normalizar(pub.resumo)]
 
-    # Negativos: só o começo (cabeçalho). Isso evita rejeitar uma IRP porque o
-    # corpo menciona "ata de registro de preços" mais adiante.
+    # Janela dos negativos: só o cabeçalho, senão uma IRP seria rejeitada por
+    # citar "ata de registro" no meio do texto.
     cabecalhos_negativos = [base[:400] for base in bases if base]
     for termo in NEGATIVOS_CABECALHO:
         if any(termo in cabecalho for cabecalho in cabecalhos_negativos):
             return False, f"cabeçalho negativo: {termo}"
 
-    # Positivos: uma janela um pouco maior, para pegar títulos depois do nome
-    # do órgão.
+    # Janela dos positivos é maior: o título costuma vir depois do nome do órgão.
     cabecalhos_positivos = [base[:800] for base in bases if base]
     for termo in POSITIVOS_CABECALHO:
         if any(termo in cabecalho for cabecalho in cabecalhos_positivos):

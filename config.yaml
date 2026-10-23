@@ -1,29 +1,26 @@
-# Configuração do monitor de licitações do DOE-RN
+# Monitor de licitações do DOE-RN
 #
-# Diário Oficial do RN: código 121 (DEI/RN)
-# A API usada é a mesma da "Busca Avançada" do portal:
-# https://deirn.sdoe.com.br/diariooficialweb/#/busca-avancada?diario=MTIx
+# Diário Oficial do RN: código 121 (DEI/RN). A busca usa a API pública da
+# "Busca Avançada": https://deirn.sdoe.com.br/diariooficialweb/#/busca-avancada?diario=MTIx
 
 diario:
   codigo: 121
   nome: "DOE-RN"
 
 periodo:
-  # Janela padrão quando o bot roda sem --data/--desde/--ate.
-  # 2 = hoje + ontem (evita perder publicação do fim do dia).
+  # Janela padrão sem --data/--desde/--ate. 2 = hoje + ontem, porque a
+  # publicação do DOE costuma sair durante o dia.
   dias: 2
 
-# Cada item é uma consulta independente. O bot junta os resultados e remove
-# duplicados pelo código da publicação.
+# Cada item é uma consulta independente; os resultados são unidos e
+# deduplicados pelo código da publicação.
 #
-# Foco atual: SEAD (código de categoria 1164), que inclui a Central de
-# Aquisições / Coordenadoria de Compras Governamentais (COMPR/SEAD).
-# O filtro por categoria é feito no servidor, então não precisamos buscar o DOE
-# inteiro e descartar depois.
+# codigoCategoria 1164 = SEAD, o que inclui a Coordenadoria de Compras
+# Governamentais (COMPR/SEAD). O filtro é aplicado no servidor, então a busca
+# já volta só com publicações da SEAD.
 #
-# Atenção: a API pública permite 100 requisições por hora. Cada consulta gasta
-# 1 requisição (ou 2, se houver mais de 100 resultados e a paginação for
-# acionada). Mantenha a lista enxuta.
+# A API permite 100 requisições por hora: cada consulta gasta 1 (2 se paginar).
+# Mantenha a lista enxuta.
 buscas:
   - palavras: "licitação"
     codigoCategoria: 1164
@@ -43,45 +40,36 @@ buscas:
     codigoCategoria: 1164
 
 filtros:
-  # Foco na SEAD. Isso também exclui IPERN/DATANORTE, caso a busca por
-  # categoria os traga; se quiser incluí-los, remova esta linha.
+  # Segunda barreira contra outro órgão. Para monitorar todas as secretarias,
+  # apague esta linha (e os codigoCategoria acima).
   categorias_incluir:
     - "Secretaria de Estado da Administração - SEAD"
 
-  # Por padrão o bot foca no Estado. Para incluir prefeituras/câmaras, rode
-  # com --incluir-municipios ou remova a linha correspondente.
+  # O bot foca no Estado. Para incluir prefeituras/câmaras, use
+  # --incluir-municipios ou remova as linhas correspondentes.
   categorias_excluir:
     - "Prefeituras e Câmaras Municipais"
     - "Publicações Particulares"
     - "Concurso e Processo Seletivos"
     - "Concursos e Seleções"
 
-  # Filtros opcionais por conteúdo. Exemplo:
-  # termos_incluir: ["medicamento", "material hospitalar"]
-  # termos_excluir: ["merenda escolar", "publicidade"]
-  #
-  # Se o interesse for tecnologia (como no script antigo), use:
-  # termos_incluir:
-  #   - "software"
-  #   - "tecnologia da informacao"
-  #   - "licenca de uso"
-  #   - "computador"
+  # Filtro opcional por assunto, por exemplo:
+  # termos_incluir: ["software", "tecnologia da informacao"]
+  # termos_excluir: ["merenda escolar"]
   termos_incluir: []
   termos_excluir: []
 
 telegram:
-  # true = envia o PDF da publicação como documento (quando existir).
-  # Custa chamadas extras à API; com o limite de 100/hora, use com moderação.
+  # true = envia o PDF como documento quando a publicação tiver arquivo.
   anexar_pdf: false
-  # true = notificação silenciosa (sem som)
+  # true = notificação sem som
   silencioso: false
-  # Limite de mensagens por execução, para não floodar o chat.
+  # Teto de mensagens por execução, para não floodar o chat
   limite_notificacoes: 20
 
 links:
-  # Resolve o link direto da publicação (2 chamadas extras por item).
-  # Desligado por padrão por causa do limite de 100 requisições/hora da API.
-  # Se ligar, o bot respeita max_diretos e cai no link da busca em caso de erro.
+  # Link direto da publicação custa 2 chamadas extras por item; por isso vem
+  # desligado. Com direto: false o bot manda o link da busca, que já funciona.
   direto: false
   max_diretos: 5
 

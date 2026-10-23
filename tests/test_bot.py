@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import sys
 import unittest
 from datetime import date
@@ -7,8 +5,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from bot import deduplicar_por_codigo  # noqa: E402
-from doe import Publicacao  # noqa: E402
+from bot import deduplicar_por_codigo
+from doe import Publicacao
 
 
 def publicacao(codigo: int, texto: str) -> Publicacao:

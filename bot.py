@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Monitor de licitações do Diário Oficial do Estado do Rio Grande do Norte.
+"""Monitor de licitações do Diário Oficial do RN (DOE-RN).
 
-Uso rápido:
-    python bot.py --dry-run --dias 2
-    python bot.py --test-telegram
+Uso:
+    python bot.py --dias 2 --dry-run
     python bot.py --dias 2
-    python bot.py --orgao SEAD --dias 5
+    python bot.py --test-telegram
 """
 from __future__ import annotations
 
@@ -33,6 +32,7 @@ LOGGER = logging.getLogger("bot")
 
 TZ = ZoneInfo("America/Sao_Paulo")
 
+# 1164 = categoria "Secretaria de Estado da Administração - SEAD" no DOE-RN.
 DEFAULTS: dict[str, Any] = {
     "diario": {"codigo": 121, "nome": "DOE-RN"},
     "periodo": {"dias": 2},
@@ -67,9 +67,6 @@ DEFAULTS: dict[str, Any] = {
 }
 
 
-# ----------------------------------------------------------------------
-# Configuração e argumentos
-# ----------------------------------------------------------------------
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -209,9 +206,6 @@ def aplicar_overrides(cfg: dict[str, Any], args: argparse.Namespace) -> None:
         cfg.setdefault("estado", {})["arquivo"] = args.estado
 
 
-# ----------------------------------------------------------------------
-# Mensagens
-# ----------------------------------------------------------------------
 def montar_mensagem(
     pub: Publicacao,
     link_direto: str = "",
@@ -222,7 +216,7 @@ def montar_mensagem(
 
     linhas: list[str] = []
     if not curta:
-        linhas.append("🚨 <b>Nova oportunidade — DOE-RN</b>")
+        linhas.append("<b>DOE-RN — nova publicação</b>")
 
     linhas.append(f"<b>Publicado:</b> {pub.data_publicacao:%d/%m/%Y}")
     linhas.append(f"<b>Órgão:</b> {esc(pub.orgao)}")
@@ -237,9 +231,9 @@ def montar_mensagem(
 
     links = []
     if link_direto:
-        links.append(f'<a href="{esc_url(link_direto)}">🔗 Abrir publicação</a>')
+        links.append(f'<a href="{esc_url(link_direto)}">Abrir publicação</a>')
     if link_busca:
-        links.append(f'<a href="{esc_url(link_busca)}">🔎 Buscar no DOE</a>')
+        links.append(f'<a href="{esc_url(link_busca)}">Buscar no DOE</a>')
     if links:
         linhas.append(" | ".join(links))
 
@@ -264,17 +258,13 @@ def imprimir_dry_run(pub: Publicacao, mensagem: str) -> None:
     print(mensagem)
 
 
-# ----------------------------------------------------------------------
-# Coleta
-# ----------------------------------------------------------------------
 def coletar(
     api: DOEAPI, cfg: dict[str, Any], inicio: date, fim: date
 ) -> tuple[list[Publicacao], int, bool]:
-    """Executa as buscas e devolve (publicações, falhas, bloqueado).
+    """Roda as buscas do config. Devolve (publicações, falhas, bloqueado).
 
-    ``bloqueado`` indica que a API pediu uma espera longa (rate limit) e as
-    buscas restantes foram interrompidas. Os resultados já obtidos continuam
-    válidos e são processados normalmente.
+    ``bloqueado`` = a API pediu espera longa e as buscas restantes foram
+    interrompidas. O que já veio continua válido.
     """
     todas: list[Publicacao] = []
     falhas = 0
@@ -324,11 +314,11 @@ def coletar(
 
 
 def deduplicar_por_codigo(publicacoes: list[Publicacao]) -> list[Publicacao]:
-    """Mantém uma publicação por código, preferindo o texto mais completo.
+    """Uma publicação por código, preferindo o texto mais completo.
 
-    A mesma matéria pode aparecer em consultas diferentes com trechos
-    (snippets) de tamanhos diferentes. Guardar o texto mais longo evita que um
-    trecho curto esconda um termo negativo/positivo importante.
+    A mesma matéria aparece em consultas diferentes com snippets de tamanhos
+    diferentes; guardar o mais longo evita perder um termo que só aparece no
+    texto completo.
     """
     por_codigo: dict[int, Publicacao] = {}
     for pub in publicacoes:
@@ -363,9 +353,6 @@ def chaves_publicacao(pub: Publicacao) -> list[str]:
     ]
 
 
-# ----------------------------------------------------------------------
-# Main
-# ----------------------------------------------------------------------
 def main(argv: Optional[list[str]] = None) -> int:
     args = parse_args(argv)
     logging.basicConfig(
@@ -437,7 +424,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         inicio.strftime("%d/%m/%Y"),
         fim.strftime("%d/%m/%Y"),
     )
-    if filtro._cat_inc:
+    if filtro.categorias_incluir:
         LOGGER.info("Filtro de órgão/categoria: %s", ", ".join(filtro.categorias_incluir))
 
     todas, falhas_busca, bloqueado = coletar(api, cfg, inicio, fim)
@@ -510,7 +497,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     anexar_pdf = bool((cfg.get("telegram") or {}).get("anexar_pdf", False))
     silencioso = bool((cfg.get("telegram") or {}).get("silencioso", False))
 
-    # Resolve links e, se necessário, baixa os detalhes para anexar o PDF.
+    # Link direto e PDF custam chamadas extras; o limite de detalhes evita
+    # estourar a cota da API quando há muitas publicações.
     for pub in para_notificar:
         pub.link_busca = api.link_busca(pub.consulta, inicio, fim)
 
@@ -593,7 +581,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         try:
             telegram.enviar_texto(
                 (
-                    f"⚠️ <b>Mais {len(restantes)} oportunidade(s)</b> encontradas "
+                    f"<b>Foram encontradas mais {len(restantes)} oportunidade(s)</b> "
                     f"além do limite de {limite} desta execução.\n"
                     "Ajuste os filtros ou consulte a Busca Avançada do DOE-RN."
                 ),

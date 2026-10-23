@@ -1,15 +1,10 @@
-"""Cliente da API pública do Diário Oficial do RN (SDOE).
-
-O portal antigo (diariooficial.rn.gov.br) é ASP.NET WebForms e só tem busca
-até 17/11/2022. A busca atual fica no SDOE:
+"""Cliente da API pública do SDOE, a mesma que alimenta a Busca Avançada.
 
     https://deirn.sdoe.com.br/diariooficialweb/#/busca-avancada?diario=MTIx
 
-O SPA usa a API pública abaixo, que devolve JSON e não exige login:
-
-    POST /diariooficial/public/search
-
-Este módulo encapsula essa API, com retry, paginação e tratamento de erros.
+O portal antigo (diariooficial.rn.gov.br) é ASP.NET WebForms e só tem busca até
+17/11/2022; para conteúdo atual só essa API. Ela não tem documentação oficial —
+os nomes de campo vêm da observação do que o SPA envia.
 """
 from __future__ import annotations
 
@@ -34,8 +29,6 @@ DIARIO_B64 = base64.b64encode(str(CODIGO_DIARIO).encode()).decode()
 
 
 class DOEAPIError(RuntimeError):
-    """Erro de comunicação ou de contrato com a API do DOE-RN."""
-
     def __init__(
         self,
         mensagem: str,
@@ -83,8 +76,7 @@ class DOEAPI:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.pausa = max(0.0, float(pausa))
-        # Se a API pedir para esperar mais que isso, é melhor abortar a
-        # execução do que ficar dormindo por quase uma hora.
+        # Acima disso, é melhor abortar a execução do que dormir quase uma hora.
         self.max_espera = max(1, int(max_espera))
         self.session = session or requests.Session()
         self.session.headers.update(
@@ -102,11 +94,7 @@ class DOEAPI:
         )
         self._ultima_requisicao = 0.0
 
-    # ------------------------------------------------------------------
-    # HTTP
-    # ------------------------------------------------------------------
     def _throttle(self) -> None:
-        """Mantém um intervalo mínimo entre chamadas à API."""
         if self.pausa <= 0:
             return
         decorrido = time.monotonic() - self._ultima_requisicao
@@ -116,7 +104,7 @@ class DOEAPI:
 
     @staticmethod
     def _retry_after(resposta: requests.Response) -> int:
-        """Lê o tempo de espera do JSON de erro (ou do header Retry-After)."""
+        """Lê a espera do JSON de erro; se não vier, cai no header."""
         valor: Any = None
         try:
             dados = resposta.json()
@@ -132,13 +120,11 @@ class DOEAPI:
             return 10
 
     def _request(self, metodo: str, caminho: str, **kwargs: Any) -> Any:
-        """Executa uma chamada HTTP com throttle, retry e tratamento de 429.
+        """Chamada HTTP com throttle, retry e leitura do rate limit.
 
-        A API pública limita a 100 requisições por hora. Quando o limite é
-        atingido, ela devolve HTTP 429 com ``retry_after_sec``. Se a espera for
-        curta, o bot aguarda e tenta de novo; se for longa, levanta
-        ``DOEAPIError`` com ``permanente=True`` para a execução parar sem
-        ficar travada por dezenas de minutos.
+        A API pública deixa 100 requisições por hora e, no 429, devolve
+        ``retry_after_sec``. Espera curta a gente aguenta; espera longa vira
+        ``DOEAPIError(permanente=True)`` e a execução para.
         """
         url = f"{self.base_url}{caminho}"
         max_tentativas = 4
@@ -210,8 +196,7 @@ class DOEAPI:
                 continue
 
             if resposta.status_code >= 400:
-                # 4xx (salvo 429) é erro de contrato/parâmetro: não adianta
-                # repetir e cada tentativa só gasta o limite da API.
+                # 4xx (salvo 429) é parâmetro errado: repetir só gasta o limite.
                 raise DOEAPIError(
                     f"HTTP {resposta.status_code} em {url}: "
                     f"{resposta.text[:300]}",
@@ -228,9 +213,6 @@ class DOEAPI:
 
         raise DOEAPIError(f"Falha ao acessar {url} após {max_tentativas} tentativas")
 
-    # ------------------------------------------------------------------
-    # Busca
-    # ------------------------------------------------------------------
     def buscar(
         self,
         palavras: str,
@@ -240,10 +222,10 @@ class DOEAPI:
         max_paginas: int = 5,
         categoria_id: Optional[int] = None,
     ) -> list[Publicacao]:
-        """Executa a busca avançada e devolve as publicações encontradas.
+        """Busca avançada paginada.
 
-        O campo ``intervaloAno`` é o que a própria interface envia. Apesar do
-        nome, ele recebe o intervalo de datas no formato DD/MM/AAAA-DD/MM/AAAA.
+        A data vai em ``intervaloAno``, no formato DD/MM/AAAA-DD/MM/AAAA — é o
+        campo que a própria interface usa, apesar do nome.
         """
         if inicio > fim:
             raise ValueError("Data inicial maior que a data final")
@@ -323,12 +305,9 @@ class DOEAPI:
             titulo=limpar_html(titulo),
         )
 
-    # ------------------------------------------------------------------
-    # Links
-    # ------------------------------------------------------------------
     @staticmethod
     def link_busca(palavras: str, inicio: date, fim: date) -> str:
-        """Link para a busca avançada já preenchida no portal."""
+        """Link da Busca Avançada já com os parâmetros preenchidos."""
         params = {
             "diario": DIARIO_B64,
             "inicio": inicio.strftime("%d/%m/%Y"),
@@ -339,12 +318,10 @@ class DOEAPI:
         return f"{WEB_URL}/#/busca-avancada?{urlencode(params)}"
 
     def detalhes(self, codigo: int) -> dict[str, Any]:
-        """Busca os metadados e o arquivo (quando houver) de uma publicação.
+        """Metadados e arquivo (quando houver) de uma publicação.
 
-        A rota /visualizar-publicacao do SPA não recebe o código que aparece na
-        busca; ela recebe o ``idMateriaArquivo``. Por isso são necessárias duas
-        chamadas: uma para descobrir ``codigoPublicacao`` e ``codigoCliente`` e
-        outra para obter ``idMateriaArquivo``.
+        A rota de visualização do SPA não recebe o código da busca, e sim o
+        ``idMateriaArquivo`` — por isso são duas chamadas.
         """
         materia = self._request(
             "GET",
@@ -394,13 +371,13 @@ class DOEAPI:
     def arquivo_de_detalhes(
         detalhes: dict[str, Any],
     ) -> Optional[tuple[bytes, str, str]]:
-        """Devolve (conteúdo, nome, mimetype) do PDF, se a publicação tiver arquivo."""
+        """Devolve (conteúdo, nome, mimetype) do PDF, se a publicação tiver."""
         arquivo = detalhes.get("arquivo")
         if not arquivo:
             return None
         try:
             conteudo = base64.b64decode(arquivo)
-        except Exception as exc:  # noqa: BLE001 - base64 inválido vem da API
+        except ValueError as exc:
             raise DOEAPIError("Arquivo da publicação inválido") from exc
 
         nome = detalhes.get("nomeArquivo") or "publicacao.pdf"

@@ -1,4 +1,4 @@
-"""Funções de texto compartilhadas pelo bot."""
+"""Texto: limpeza de HTML, normalização e hash para deduplicação."""
 from __future__ import annotations
 
 import hashlib
@@ -10,7 +10,8 @@ _TAG_RE = re.compile(r"<[^>]+>")
 _ESPACO_RE = re.compile(r"\s+")
 _LINHA_RE = re.compile(r"[\r\n]+")
 
-# Usado para escolher uma linha que pareça ser o título da publicação.
+# Termas que ajudam a escolher, entre as linhas iniciais, qual parece ser o
+# título da publicação.
 _POSITIVOS_TITULO = (
     "aviso",
     "edital",
@@ -30,7 +31,7 @@ _POSITIVOS_TITULO = (
 
 
 def limpar_html(texto: str) -> str:
-    """Remove tags HTML, entidades e espaços repetidos."""
+    """Remove tags, entidades e espaços repetidos."""
     if not texto:
         return ""
     texto = _TAG_RE.sub(" ", str(texto))
@@ -40,7 +41,7 @@ def limpar_html(texto: str) -> str:
 
 
 def normalizar(texto: str) -> str:
-    """Minúsculas, sem acentos e com espaços normalizados (para comparação)."""
+    """Minúsculas e sem acentos, para comparações."""
     texto = limpar_html(texto).lower()
     texto = unicodedata.normalize("NFKD", texto)
     texto = "".join(ch for ch in texto if not unicodedata.combining(ch))
@@ -48,7 +49,7 @@ def normalizar(texto: str) -> str:
 
 
 def truncar(texto: str, limite: int, sufixo: str = "...") -> str:
-    """Trunca sem cortar no meio de uma palavra quando possível."""
+    """Corta no limite, sem partir uma palavra no meio."""
     texto = (texto or "").strip()
     if len(texto) <= limite:
         return texto
@@ -57,13 +58,13 @@ def truncar(texto: str, limite: int, sufixo: str = "...") -> str:
 
 
 def hash_conteudo(texto: str) -> str:
-    """Hash estável do começo do texto, para deduplicar publicações repetidas."""
+    """Hash curto do começo do texto — a mesma matéria aparece em várias buscas."""
     base = normalizar(texto)[:4000]
     return hashlib.sha1(base.encode("utf-8")).hexdigest()[:16]
 
 
 def extrair_titulo(texto: str, resumo: str = "") -> str:
-    """Tenta extrair um título curto do texto da publicação."""
+    """Primeira linha que pareça ser título; senão, a primeira linha do texto."""
     base = limpar_html(texto or resumo)
     if not base:
         return ""

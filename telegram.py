@@ -1,4 +1,4 @@
-"""Notificação via Telegram."""
+"""Envio de mensagens para o Telegram."""
 from __future__ import annotations
 
 import html
@@ -12,7 +12,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class TelegramError(RuntimeError):
-    """Erro ao falar com a API do Telegram."""
+    pass
 
 
 def esc(texto: str) -> str:
@@ -121,6 +121,6 @@ class Telegram:
 
     def testar(self) -> dict:
         return self.enviar_texto(
-            "✅ <b>Bot DOE-RN configurado com sucesso.</b>\n"
-            "A partir de agora você receberá as licitações encontradas."
+            "<b>Bot DOE-RN configurado.</b>\n"
+            "A partir de agora você recebe as publicações encontradas."
         )
