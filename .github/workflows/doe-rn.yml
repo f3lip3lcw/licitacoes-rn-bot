@@ -2,8 +2,8 @@ name: Monitor DOE-RN
 
 on:
   schedule:
-    # GitHub Actions usa UTC. 11:00 UTC = 08:00 em America/Sao_Paulo (UTC-3).
-    # O `* *` no fim significa todos os dias.
+    # GitHub Actions usa UTC. 11:00 UTC = 08:00 em America/Sao_Paulo (UTC-3),
+    # todos os dias.
     - cron: "0 11 * * *"
   workflow_dispatch:
     inputs:
@@ -12,9 +12,9 @@ on:
         required: false
         default: "2"
       config:
-        description: "Perfil de configuração (config.yaml ou config-ti.yaml)"
+        description: "Perfil: ambos, config.yaml (SEAD geral) ou config-ti.yaml (TI)"
         required: false
-        default: "config.yaml"
+        default: "ambos"
 
 permissions:
   contents: write
@@ -43,14 +43,25 @@ jobs:
       - name: Instalar dependências
         run: pip install -r requirements.txt
 
-      - name: Rodar o bot
+      # No agendamento (schedule) os inputs vêm vazios, então as condições
+      # abaixo deixam os dois perfis rodarem.
+      - name: Rodar o bot (SEAD geral)
+        if: github.event.inputs.config != 'config-ti.yaml'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
           DIAS: ${{ github.event.inputs.dias || '2' }}
-          CONFIG: ${{ github.event.inputs.config || 'config.yaml' }}
-        run: python bot.py --dias "$DIAS" --config "$CONFIG"
+        run: python bot.py --dias "$DIAS" --config config.yaml
+
+      - name: Rodar o bot (perfil TI)
+        if: always() && github.event.inputs.config != 'config.yaml'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
+          DIAS: ${{ github.event.inputs.dias || '2' }}
+        run: python bot.py --dias "$DIAS" --config config-ti.yaml
 
       - name: Persistir estado (evita notificações repetidas)
         if: always()

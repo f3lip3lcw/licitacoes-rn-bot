@@ -104,8 +104,11 @@ O token é uma senha: o `.env` está no `.gitignore` e nunca deve entrar no Git.
 ## Rodando todo dia (GitHub Actions)
 
 O workflow `.github/workflows/doe-rn.yml` roda o bot todos os dias às 08h de
-Brasília, sem ligar o Mac e sem custo no plano gratuito. Já está configurado no
-repositório `f3lip3lcw/licitacoes-rn-bot`. Para montar em outro lugar:
+Brasília, sem ligar o Mac e sem custo no plano gratuito. Ele executa **os dois
+perfis** — `config.yaml` (SEAD geral) e `config-ti.yaml` (TI) — e o estado
+compartilhado evita que a mesma publicação seja avisada duas vezes. Já está
+configurado no repositório `f3lip3lcw/licitacoes-rn-bot`. Para montar em outro
+lugar:
 
 1. `git push` do código.
 2. Cadastrar os segredos em **Settings → Secrets and variables → Actions**:
@@ -113,7 +116,9 @@ repositório `f3lip3lcw/licitacoes-rn-bot`. Para montar em outro lugar:
 3. Em **Settings → Actions → General → Workflow permissions**, marcar
    **Read and write permissions**. Sem isso o workflow não salva o
    `.state/seen.json` e as licitações seriam reenviadas todo dia.
-4. Testar pela aba **Actions → Monitor DOE-RN → Run workflow**.
+4. Testar pela aba **Actions → Monitor DOE-RN → Run workflow**. No disparo
+   manual dá para escolher o perfil: `ambos` (padrão), `config.yaml` ou
+   `config-ti.yaml`.
 
 O horário é o cron, em UTC:
 
