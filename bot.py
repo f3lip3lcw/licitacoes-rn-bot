@@ -56,6 +56,7 @@ DEFAULTS: dict[str, Any] = {
         ],
         "termos_incluir": [],
         "termos_excluir": [],
+        "regras_incluir": [],
     },
     "telegram": {
         "anexar_pdf": False,
@@ -410,6 +411,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         categorias_excluir=filtros_cfg.get("categorias_excluir") or [],
         termos_incluir=filtros_cfg.get("termos_incluir") or [],
         termos_excluir=filtros_cfg.get("termos_excluir") or [],
+        regras_incluir=filtros_cfg.get("regras_incluir") or [],
     )
 
     estado_cfg = cfg.get("estado") or {}
@@ -426,6 +428,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     if filtro.categorias_incluir:
         LOGGER.info("Filtro de órgão/categoria: %s", ", ".join(filtro.categorias_incluir))
+    if filtro.regras_incluir:
+        LOGGER.info(
+            "Regras de assunto: %d grupo(s) — todos precisam casar",
+            len(filtro.regras_incluir),
+        )
 
     todas, falhas_busca, bloqueado = coletar(api, cfg, inicio, fim)
     if not todas:

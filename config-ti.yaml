@@ -1,0 +1,246 @@
+# Perfil TI — licitações de tecnologia da informação (DOE-RN, foco SEAD)
+#
+# Uso:
+#   python bot.py --config config-ti.yaml --dias 2 --dry-run
+#   python bot.py --config config-ti.yaml --dias 2
+#
+# Herda os padrões do bot (categoria SEAD 1164, telegram, estado) e muda só
+# as buscas e os filtros de assunto.
+
+buscas:
+  # --- Fase de licitação (avisos iminentes) ---
+  - palavras: "licitação"
+    codigoCategoria: 1164
+  - palavras: "pregão eletrônico"
+    codigoCategoria: 1164
+  - palavras: "registro de preços"
+    codigoCategoria: 1164
+  - palavras: "dispensa"
+    codigoCategoria: 1164
+  - palavras: "credenciamento"
+    codigoCategoria: 1164
+  - palavras: "chamamento público"
+    codigoCategoria: 1164
+  - palavras: "coordenadoria de compras"
+    codigoCategoria: 1164
+  - palavras: "concorrência"
+    codigoCategoria: 1164
+
+  # --- Fase prévia (planejamento e interação com o mercado) ---
+  # É aqui que dá tempo de montar a proposta antes do edital. Cada consulta
+  # gasta requisição da API (limite 100/hora): com as 13 abaixo o bot usa
+  # ~13 a 26 por execução. Se aparecer 429, tire alguma consulta daqui.
+  - palavras: "tecnologia da informação"
+    codigoCategoria: 1164
+  - palavras: "pesquisa de preços"
+    codigoCategoria: 1164
+  - palavras: "consulta pública"
+    codigoCategoria: 1164
+  - palavras: "manifestação de interesse"
+    codigoCategoria: 1164
+  - palavras: "estudo técnico preliminar"
+    codigoCategoria: 1164
+
+filtros:
+  # Regra lógica: (grupo 1) E (grupo 2). Cada item é um grupo, e TODOS os
+  # grupos precisam ter pelo menos um termo no texto da publicação.
+  #
+  # Traduzindo: só avisa se a publicação tiver um gatilho de fase E um objeto
+  # de TI. Isso corta tanto o edital de obra quanto a pesquisa de preços de
+  # material de limpeza.
+  regras_incluir:
+    - # ===== Grupo 1: fase da contratação =====
+      # planejamento, cotação, consulta ao mercado e avisos
+      - "Plano Diretor de Tecnologia da Informação"
+      - "Plano de Contratações Anual"
+      - "Plano Anual de Contratações"
+      - "Documento de Oficialização da Demanda"
+      - "Estudo Técnico Preliminar"
+      - "Minuta de Termo de Referência"
+      - "Minuta de Edital"
+      - "Pesquisa de Preços"
+      - "Pesquisa Mercadológica"
+      - "Solicitação de Cotação"
+      - "Pedido de Cotação"
+      - "Consulta Pública"
+      - "Audiência Pública"
+      - "Request for Information"
+      - "Procedimento de Manifestação de Interesse"
+      - "Chamamento Público"
+      - "Intenção de Registro de Preços"
+      - "IRP"
+      - "Aviso de Licitação"
+      - "Aviso de Pregão"
+      - "Aviso de Concorrência"
+      - "Aviso de Contratação Direta"
+      - "Aviso de Dispensa Eletrônica"
+      - "Aviso de Abertura"
+      - "Aviso aos Licitantes"
+      - "Edital"
+      - "Pregão Eletrônico"
+      - "Pregão Presencial"
+      - "Concorrência"
+      - "Dispensa Eletrônica"
+      - "Processo Licitatório"
+      - "Contratação Direta"
+      - "Tomada de Preços"
+      - "Leilão"
+
+    - # ===== Grupo 2: objeto de TI =====
+      # 1. Termos normativos e genéricos
+      - "Tecnologia da Informação"
+      - "Tecnologia da Informação e Comunicação"
+      - "Solução de TIC"
+      - "Solução de Informática"
+      - "Bens de Informática"
+      - "Ativos de TI"
+      - "Sistema de Informação"
+      - "Processamento de Dados"
+      - "Catálogo de Serviços de TIC"
+      - "Instrução Normativa 94"
+      - "94/2022"
+
+      # 2. Desenvolvimento de sistemas e software
+      - "Fábrica de Software"
+      - "Desenvolvimento de Software"
+      - "Sustentação de Sistemas"
+      - "Ponto de Função"
+      - "Pontos de Função"
+      - "Métrica de Ponto de Função"
+      - "Unidade de Serviço Técnico"
+      - "Desenvolvimento Ágil"
+      - "DevOps"
+      - "Microsserviços"
+      - "Interface de Programação"
+      - "Banco de Dados"
+      - "Oracle"
+      - "PostgreSQL"
+      - "SQL Server"
+      - "Aplicativo Mobile"
+      - "Aplicativo Móvel"
+      - "Engenharia de Software"
+      # "UST" e "API" sozinhas não entraram: busca por substring casa dentro de
+      # outras palavras (robusto, justiça, capital). Use os termos compostos.
+
+      # 3. Infraestrutura, redes e nuvem
+      - "Computação em Nuvem"
+      - "Cloud Computing"
+      - "IaaS"
+      - "PaaS"
+      - "SaaS"
+      - "Data Center"
+      - "Datacenter"
+      - "Colocation"
+      - "Hosting"
+      - "Servidor"
+      - "Servidores"
+      - "Armazenamento de Dados"
+      - "Storage"
+      - "Máquina Virtual"
+      - "Virtualização"
+      - "VMware"
+      - "Hyper-V"
+      - "Ativos de Rede"
+      - "Cabeamento Estruturado"
+      - "Fibra Óptica"
+      - "Switch"
+      - "Switches"
+      - "Roteador"
+      - "Roteadores"
+      - "Access Point"
+      - "Rede Sem Fio"
+      - "SD-WAN"
+      - "Wi-Fi"
+
+      # 4. Hardware e equipamentos (microinformática)
+      - "Computador"
+      - "Microcomputador"
+      - "Desktop"
+      - "Notebook"
+      - "Laptop"
+      - "Tablet"
+      - "Monitor de Vídeo"
+      - "Estação de Trabalho"
+      - "Workstation"
+      - "Nobreak"
+      - "Rack"
+      - "Scanner"
+      - "Digitalizador"
+      - "Lousa Digital"
+      - "Videoconferência"
+      - "Webcam"
+      # "impressoras" ficou de fora: casa com serviços gráficos. Para
+      # equipamento use "Locação de Impressora" (abaixo).
+
+      # 5. Segurança da informação
+      - "Segurança da Informação"
+      - "Cibersegurança"
+      - "Firewall"
+      - "Next Generation Firewall"
+      - "NGFW"
+      - "Antivírus"
+      - "Endpoint Protection"
+      - "Endpoint Detection"
+      - "Security Operations Center"
+      - "SIEM"
+      - "Pentest"
+      - "Teste de Invasão"
+      - "Análise de Vulnerabilidade"
+      - "Backup"
+      - "Cópia de Segurança"
+      - "Disaster Recovery"
+      - "Recuperação de Desastres"
+      - "Criptografia"
+      - "Certificado Digital"
+      - "Token"
+      - "Web Application Firewall"
+      - "WAF"
+      - "LGPD"
+      # "SOC" ficou de fora: casa em "sociedade".
+
+      # 6. Suporte, help desk e outsourcing
+      - "Service Desk"
+      - "Help Desk"
+      - "Suporte Técnico em Informática"
+      - "Manutenção de Equipamentos de Informática"
+      - "Manutenção Preventiva e Corretiva de TI"
+      - "Manutenção Preventiva e Corretiva de Informática"
+      - "Outsourcing de Impressão"
+      - "Locação de Impressora"
+      - "Gestão de Impressão"
+      - "Network Operations Center"
+      - "Monitoramento de Rede"
+      - "Terceirização de TI"
+      # "NOC" ficou de fora: substring perigosa.
+
+      # 7. Licenciamento (software de prateleira)
+      - "Licenciamento de Software"
+      - "Subscrição de Licenças"
+      - "Renovação de Suporte Técnico"
+      - "Microsoft"
+      - "Office 365"
+      - "Windows"
+      - "Sistema de Gestão Empresarial"
+      - "ERP"
+      - "CRM"
+      - "Software de Prateleira"
+
+  # NOT: vale para o texto inteiro e rejeita na hora.
+  termos_excluir:
+    - "Rede de Esgoto"
+    - "Rede de Proteção"
+    - "Impressão Gráfica"
+    - "Material de Limpeza"
+    - "Gêneros Alimentícios"
+    # "servidor publico" ficou comentado de propósito: cortaria objetos
+    # legítimos de TI, como "sistema de atendimento aos servidores públicos".
+    # A defesa contra concurso já vem de "concurso publico" nos negativos de
+    # cabeçalho (filters.py). Se quiser testar, descomente:
+    # - "Servidor Público"
+
+  # Reaproveita do perfil geral a categoria SEAD e a exclusão de prefeituras,
+  # particulares e concursos (categorias_incluir / categorias_excluir).
+
+telegram:
+  # Com as buscas de fase prévia pode vir mais publicação por dia.
+  limite_notificacoes: 30

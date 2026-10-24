@@ -137,12 +137,41 @@ Duas observações:
 
 Tudo em `config.yaml`.
 
+**Perfis.** Além do `config.yaml` (SEAD geral), o repositório traz o
+`config-ti.yaml`, que foca em tecnologia da informação — inclusive nas fases
+antes do edital (ETP, minuta de termo de referência, pesquisa de preços,
+consulta pública):
+
+```bash
+python bot.py --config config-ti.yaml --dias 2 --dry-run
+```
+
+No GitHub Actions, o input `config` do workflow escolhe o perfil. Para o
+perfil TI rodar todo dia, troque o default em `.github/workflows/doe-rn.yml`
+de `config.yaml` para `config-ti.yaml`.
+
 **Consultas.** Cada item de `buscas` é uma consulta, e `codigoCategoria: 1164`
 filtra no servidor pela SEAD. A API é tolerante a acentos (`licitação` =
 `licitacao`). Cuidado com o limite de **100 requisições por hora**: com as 8
-consultas atuais o bot gasta ~8 por execução.
+consultas do perfil geral o bot gasta ~8 por execução, e o perfil TI usa ~13 a
+26.
 
-**Assunto.** Para restringir por tema:
+**Assunto.** `termos_incluir` é um OR simples: basta um termo. Já
+`regras_incluir` é uma lista de grupos, e **todos** os grupos precisam casar —
+é o (A ou B) e (C ou D):
+
+```yaml
+filtros:
+  regras_incluir:
+    - ["pesquisa de preços", "consulta pública", "aviso de licitação"]
+    - ["tecnologia da informação", "notebook", "computação em nuvem"]
+```
+
+A regra vale para o texto e o resumo. Termos curtos são armadilha: a busca é
+por substring, então `API` casaria em "capital" e `SOC` em "sociedade" — use
+termos compostos no lugar de siglas.
+
+`termos_excluir` rejeita se o termo aparecer em qualquer lugar do texto:
 
 ```yaml
 filtros:
@@ -150,8 +179,7 @@ filtros:
   termos_excluir: ["merenda escolar"]
 ```
 
-Isso vale para todas as buscas e pode deixar licitações de fora. Para duas
-frentes separadas, use dois `config.yaml`.
+Para duas frentes separadas, use dois `config.yaml`.
 
 **PDF.** `telegram: anexar_pdf: true` envia o PDF como documento quando a
 publicação tiver arquivo.

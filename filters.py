@@ -90,7 +90,9 @@ POSITIVOS_CABECALHO = (
     "convoca",
 )
 
-# Buscas já específicas o bastante: se o cabeçalho não decidir, aceitamos.
+# Buscas já específicas o bastante: se o cabeçalho não decidir, aceitamos o
+# resultado delas. Inclui os gatilhos de fase prévia (planejamento, cotação,
+# consulta ao mercado) que antecedem o edital.
 CONSULTAS_ESPECIFICAS = {
     "aviso de licitacao",
     "aviso de abertura",
@@ -100,10 +102,27 @@ CONSULTAS_ESPECIFICAS = {
     "dispensa eletronica",
     "selecao publica",
     "manifestacao de interesse",
+    "procedimento de manifestacao de interesse",
     "intencao de registro de precos",
     "concorrencia eletronica",
     "tomada de precos",
     "leilao",
+    # fase prévia: planejamento e interação com o mercado
+    "pesquisa de precos",
+    "pesquisa mercadologica",
+    "solicitacao de cotacao",
+    "pedido de cotacao",
+    "consulta publica",
+    "audiencia publica",
+    "request for information",
+    "rfi",
+    "estudo tecnico preliminar",
+    "minuta de termo de referencia",
+    "minuta de edital",
+    "documento de oficializacao da demanda",
+    "plano diretor de tecnologia da informacao",
+    "plano de contratacoes anual",
+    "plano anual de contratacoes",
 }
 
 
@@ -113,12 +132,20 @@ class FiltroConfig:
     categorias_excluir: list[str] = field(default_factory=list)
     termos_incluir: list[str] = field(default_factory=list)
     termos_excluir: list[str] = field(default_factory=list)
+    # Cada item é um grupo de termos; TODOS os grupos precisam ter pelo menos
+    # um termo no texto. É o (A ou B) E (C ou D) da configuração.
+    regras_incluir: list[list[str]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         self._cat_inc = [normalizar(x) for x in self.categorias_incluir if x]
         self._cat_exc = [normalizar(x) for x in self.categorias_excluir if x]
         self._term_inc = [normalizar(x) for x in self.termos_incluir if x]
         self._term_exc = [normalizar(x) for x in self.termos_excluir if x]
+        self._regras_inc = [
+            tuple(t for t in (normalizar(x) for x in grupo) if t)
+            for grupo in (self.regras_incluir or [])
+        ]
+        self._regras_inc = [g for g in self._regras_inc if g]
 
 
 def classificar_com_motivo(
@@ -144,6 +171,14 @@ def classificar_com_motivo(
             return False, f"contém termo excluído: {termo}"
 
     bases = [texto, normalizar(pub.resumo)]
+
+    # Regras: todos os grupos precisam casar, em qualquer base.
+    for grupo in filtro._regras_inc:
+        if not any(t in base for base in bases for t in grupo):
+            mostrar = " / ".join(grupo[:3])
+            if len(grupo) > 3:
+                mostrar += f" (+{len(grupo) - 3})"
+            return False, f"regra sem correspondência: {mostrar}"
 
     # Janela dos negativos: só o cabeçalho, senão uma IRP seria rejeitada por
     # citar "ata de registro" no meio do texto.

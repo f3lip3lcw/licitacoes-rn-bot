@@ -11,6 +11,10 @@ on:
         description: "Janela de busca em dias (2 = hoje + ontem)"
         required: false
         default: "2"
+      config:
+        description: "Perfil de configuração (config.yaml ou config-ti.yaml)"
+        required: false
+        default: "config.yaml"
 
 permissions:
   contents: write
@@ -45,7 +49,8 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
           DIAS: ${{ github.event.inputs.dias || '2' }}
-        run: python bot.py --dias "$DIAS"
+          CONFIG: ${{ github.event.inputs.config || 'config.yaml' }}
+        run: python bot.py --dias "$DIAS" --config "$CONFIG"
 
       - name: Persistir estado (evita notificações repetidas)
         if: always()

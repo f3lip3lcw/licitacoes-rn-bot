@@ -195,5 +195,98 @@ class TestFiltros(unittest.TestCase):
         self.assertFalse(ok, motivo)
 
 
+class TestRegras(unittest.TestCase):
+    """regras_incluir: todos os grupos precisam casar (AND de ORs)."""
+
+    def setUp(self) -> None:
+        self.filtro = FiltroConfig(
+            regras_incluir=[
+                ["pesquisa de precos", "consulta publica", "aviso de licitação"],
+                ["tecnologia da informação", "notebook", "computação em nuvem"],
+            ]
+        )
+
+    def test_passa_quando_ambos_os_grupos_casam(self) -> None:
+        pub = publicacao(
+            "PESQUISA DE PREÇOS N.º 12/2026. Obtenção de cotações para aquisição "
+            "de notebooks para atendimento aos usuários.",
+            consulta="pesquisa de preços",
+        )
+        ok, motivo = classificar_com_motivo(pub, self.filtro)
+        self.assertTrue(ok, motivo)
+
+    def test_rejeita_quando_falta_o_grupo_de_objeto(self) -> None:
+        # Tem a fase (pesquisa de preços) mas o objeto não é de TI.
+        pub = publicacao(
+            "PESQUISA DE PREÇOS N.º 13/2026. Obtenção de cotações para "
+            "aquisição de materiais de limpeza e copa.",
+            consulta="pesquisa de preços",
+        )
+        ok, motivo = classificar_com_motivo(pub, self.filtro)
+        self.assertFalse(ok, motivo)
+        self.assertIn("regra", motivo)
+
+    def test_rejeita_quando_falta_o_grupo_de_fase(self) -> None:
+        # Tem objeto de TI mas nenhuma fase da contratação no texto.
+        pub = publicacao(
+            "SEAD. Contratação de empresa para fornecimento de servidores "
+            "e switches de rede para o data center.",
+            consulta="licitação",
+        )
+        ok, motivo = classificar_com_motivo(pub, self.filtro)
+        self.assertFalse(ok, motivo)
+        self.assertIn("regra", motivo)
+
+    def test_regra_aceita_termo_no_resumo(self) -> None:
+        # Caso prático: o snippet traz o objeto no resumo, não no texto.
+        pub = publicacao(
+            "SEAD, mediante a Coordenadoria de Compras Governamentais, "
+            "realizará pesquisa de preços.",
+            resumo=(
+                "Pesquisa de preços para contratação de serviço de computação "
+                "em nuvem."
+            ),
+            consulta="pesquisa de preços",
+        )
+        ok, motivo = classificar_com_motivo(pub, self.filtro)
+        self.assertTrue(ok, motivo)
+
+    def test_negativos_de_cabecalho_vale_mais_que_a_regra(self) -> None:
+        # Um extrato de TI continua sendo descartado, mesmo casando as regras.
+        pub = publicacao(
+            "EXTRATO DE HOMOLOGAÇÃO. Pesquisa de preços de notebooks. "
+            "Homologação do resultado.",
+            consulta="pesquisa de preços",
+        )
+        ok, motivo = classificar_com_motivo(pub, self.filtro)
+        self.assertFalse(ok, motivo)
+
+
+class TestConsultasDeFasePrevia(unittest.TestCase):
+    """Gatilhos de planejamento/cotação aceitos mesmo sem positivo no cabeçalho."""
+
+    def test_pesquisa_de_precos_e_consulta_publica_sao_especificas(self) -> None:
+        for consulta, texto in (
+            (
+                "pesquisa de preços",
+                "SEAD - PESQUISA DE PREÇOS N.º 44/2026. Cotações para "
+                "fornecimento de servidores.",
+            ),
+            (
+                "consulta pública",
+                "SEAD - CONSULTA PÚBLICA Nº 9/2026. Trata-se de sessão para "
+                "discussão de minuta de edital de TI.",
+            ),
+            (
+                "estudo técnico preliminar",
+                "SEAD - ESTUDO TÉCNICO PRELIMINAR. Demanda por serviço de "
+                "sustentação de sistemas.",
+            ),
+        ):
+            pub = publicacao(texto, consulta=consulta)
+            ok, motivo = classificar_com_motivo(pub, FiltroConfig())
+            self.assertTrue(ok, f"{consulta}: {motivo}")
+
+
 if __name__ == "__main__":
     unittest.main()
