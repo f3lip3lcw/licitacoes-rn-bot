@@ -7,6 +7,9 @@
 # Herda os padrões do bot (categoria SEAD 1164, telegram, estado) e muda só
 # as buscas e os filtros de assunto.
 
+# Nome que aparece no relatório do Telegram.
+perfil: "TI"
+
 buscas:
   # --- Fase de licitação (avisos iminentes) ---
   - palavras: "licitação"

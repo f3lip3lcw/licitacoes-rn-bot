@@ -2,9 +2,10 @@ name: Monitor DOE-RN
 
 on:
   schedule:
-    # GitHub Actions usa UTC. 11:00 UTC = 08:00 em America/Sao_Paulo (UTC-3),
-    # todos os dias.
-    - cron: "0 11 * * *"
+    # 11:07 UTC = 08:07 em America/Sao_Paulo (UTC-3), de segunda a sexta.
+    # O minuto fora do :00 não é erro: o início de cada hora é o pico do
+    # Actions e agendar nele costuma atrasar a execução por horas.
+    - cron: "7 11 * * 1-5"
   workflow_dispatch:
     inputs:
       dias:
@@ -62,6 +63,16 @@ jobs:
           TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
           DIAS: ${{ github.event.inputs.dias || '2' }}
         run: python bot.py --dias "$DIAS" --config config-ti.yaml
+
+      # Sempre envia, mesmo que um dos passos acima tenha falhado: o relatório
+      # é a prova diária de que o serviço rodou, com novidade ou não.
+      - name: Relatório no Telegram
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
+        run: python bot.py --relatorio
 
       - name: Persistir estado (evita notificações repetidas)
         if: always()

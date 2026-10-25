@@ -103,12 +103,14 @@ O token é uma senha: o `.env` está no `.gitignore` e nunca deve entrar no Git.
 
 ## Rodando todo dia (GitHub Actions)
 
-O workflow `.github/workflows/doe-rn.yml` roda o bot todos os dias às 08h de
-Brasília, sem ligar o Mac e sem custo no plano gratuito. Ele executa **os dois
-perfis** — `config.yaml` (SEAD geral) e `config-ti.yaml` (TI) — e o estado
-compartilhado evita que a mesma publicação seja avisada duas vezes. Já está
-configurado no repositório `f3lip3lcw/licitacoes-rn-bot`. Para montar em outro
-lugar:
+O workflow `.github/workflows/doe-rn.yml` roda o bot de segunda a sexta às
+08h07 de Brasília, sem ligar o Mac e sem custo no plano gratuito. Ele executa
+**os dois perfis** — `config.yaml` (SEAD geral) e `config-ti.yaml` (TI) — e o
+estado compartilhado evita que a mesma publicação seja avisada duas vezes.
+Depois disso, um passo separado sempre manda um **relatório no Telegram**, com
+o resultado de cada perfil — inclusive quando não há novidade, para o silêncio
+nunca virar dúvida. Já está configurado no repositório
+`f3lip3lcw/licitacoes-rn-bot`. Para montar em outro lugar:
 
 1. `git push` do código.
 2. Cadastrar os segredos em **Settings → Secrets and variables → Actions**:
@@ -120,16 +122,30 @@ lugar:
    manual dá para escolher o perfil: `ambos` (padrão), `config.yaml` ou
    `config-ti.yaml`.
 
-O horário é o cron, em UTC:
+O horário é o cron, em UTC (Brasília é UTC-3):
 
 ```yaml
 on:
   schedule:
-    - cron: "0 11 * * *"   # 11:00 UTC = 08:00 em Brasília
+    - cron: "7 11 * * 1-5"   # 11:07 UTC = 08:07 em Brasília, seg. a sex.
 ```
 
-Para mudar: 07h = `0 10 * * *`, 09h = `0 12 * * *`, só dias úteis =
-`0 11 * * 1-5`.
+| Brasília | Cron |
+|---|---|
+| 07:07 | `7 10 * * 1-5` |
+| 08:07 (atual) | `7 11 * * 1-5` |
+| 09:07 | `7 12 * * 1-5` |
+
+O minuto `7` em vez de `0` é de propósito: o início de cada hora é o pico do
+GitHub Actions e o cron no `:00` chegou a atrasar 3 horas na fila. Fins de
+semana ficaram de fora porque o DOE não publica.
+
+**Relatório.** Todo dia útil, após os dois perfis, chega no Telegram uma
+mensagem com o resultado (`Relatório DOE-RN — data`), mesmo que nada tenha
+sido encontrado. Se nenhum perfil registrar execução (ou seja, os passos
+falharam antes de gravar), a mensagem avisa isso explicitamente — o silêncio
+nunca passa despercebido. Fora do fluxo, `python bot.py --relatorio` envia o
+último resumo na hora.
 
 Duas observações:
 

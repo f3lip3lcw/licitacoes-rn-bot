@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import json
 import logging
 import os
 import sys
@@ -34,6 +35,7 @@ TZ = ZoneInfo("America/Sao_Paulo")
 
 # 1164 = categoria "Secretaria de Estado da Administração - SEAD" no DOE-RN.
 DEFAULTS: dict[str, Any] = {
+    "perfil": "SEAD geral",
     "diario": {"codigo": 121, "nome": "DOE-RN"},
     "periodo": {"dias": 2},
     "buscas": [
@@ -112,6 +114,11 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         "--test-telegram",
         action="store_true",
         help="Envia uma mensagem de teste e sai",
+    )
+    parser.add_argument(
+        "--relatorio",
+        action="store_true",
+        help="Envia o relatório da execução e sai (usado pelo workflow)",
     )
     parser.add_argument("--debug", action="store_true", help="Log detalhado")
     return parser.parse_args(argv)
@@ -354,6 +361,122 @@ def chaves_publicacao(pub: Publicacao) -> list[str]:
     ]
 
 
+# ----------------------------------------------------------------------
+# Relatório da execução (o workflow manda no Telegram mesmo sem novidade)
+# ----------------------------------------------------------------------
+def caminho_resumo(arquivo_estado: str) -> Path:
+    return Path(arquivo_estado).with_name("resumo.json")
+
+
+def registrar_resumo(arquivo_estado: str, perfil: str, resumo: dict) -> None:
+    """Grava o resultado desta execução, por perfil, em .state/resumo.json.
+
+    O mesmo arquivo serve para os dois perfis do workflow: cada execução
+    atualiza a própria chave e o relatório final lê tudo de uma vez.
+    """
+    caminho = caminho_resumo(arquivo_estado)
+    dados: dict[str, Any] = {"perfis": {}}
+
+    if caminho.exists():
+        try:
+            carregado = json.loads(caminho.read_text(encoding="utf-8"))
+            if isinstance(carregado, dict) and isinstance(carregado.get("perfis"), dict):
+                dados = carregado
+        except (ValueError, OSError):
+            pass  # resumo corrompido: recomeça, não derruba a execução
+
+    resumo["quando"] = datetime.now(TZ).isoformat(timespec="seconds")
+    dados["perfis"][perfil] = resumo
+
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    caminho.write_text(
+        json.dumps(dados, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
+
+def montar_relatorio(perfis: dict[str, dict], quando: datetime) -> str:
+    """Mensagem única com o resultado de cada perfil que rodou."""
+    linhas = [f"<b>Relatório DOE-RN — {quando:%d/%m/%Y às %H:%M}</b>"]
+
+    total_enviadas = 0
+    total_falhas = 0
+
+    for nome, r in perfis.items():
+        enviadas = int(r.get("enviadas") or 0)
+        total_enviadas += enviadas
+        total_falhas += int(r.get("falhas") or 0) + int(r.get("erros") or 0)
+        linhas.append(
+            f"<b>{esc(nome)}:</b> {int(r.get('encontradas') or 0)} encontrada(s) → "
+            f"{int(r.get('apos_filtro') or 0)} após filtro → "
+            f"{enviadas} enviada(s)"
+        )
+
+    if total_falhas:
+        linhas.append(f"⚠️ {total_falhas} falha(s) nesta execução — confira a aba Actions.")
+
+    if total_enviadas:
+        linhas.append("As publicações desta janela estão acima.")
+    else:
+        linhas.append("Nenhuma oportunidade nova nesta janela. Serviço concluído.")
+
+    return "\n".join(linhas)
+
+
+def enviar_relatorio(arquivo_estado: str) -> int:
+    """Envia o relatório dos perfis que rodaram hoje.
+
+    Sem resumo de hoje significa que a execução falhou antes de gravar alguma
+    coisa — nesse caso manda um alerta, para o silêncio não virar dúvida.
+    """
+    caminho = caminho_resumo(arquivo_estado)
+    perfis: dict[str, dict] = {}
+
+    if caminho.exists():
+        try:
+            dados = json.loads(caminho.read_text(encoding="utf-8"))
+            perfis = dados.get("perfis") or {}
+        except (ValueError, OSError):
+            perfis = {}
+
+    hoje = datetime.now(TZ).date()
+    frescos: dict[str, dict] = {}
+    for nome, r in perfis.items():
+        try:
+            quando = datetime.fromisoformat(str(r.get("quando")))
+        except (TypeError, ValueError):
+            continue
+        if quando.astimezone(TZ).date() == hoje:
+            frescos[nome] = r
+
+    telegram = Telegram(
+        token=os.getenv("TELEGRAM_BOT_TOKEN"),
+        chat_id=os.getenv("TELEGRAM_CHAT_ID"),
+        thread_id=os.getenv("TELEGRAM_THREAD_ID"),
+    )
+    if not telegram.configurado:
+        LOGGER.error("Telegram não configurado; relatório não enviado.")
+        return 2
+
+    agora = datetime.now(TZ)
+    if frescos:
+        mensagem = montar_relatorio(frescos, agora)
+    else:
+        mensagem = (
+            f"<b>Relatório DOE-RN — {agora:%d/%m/%Y às %H:%M}</b>\n"
+            "Nenhum perfil registrou execução hoje. Confira a aba Actions do "
+            "repositório: os passos podem ter falhado."
+        )
+
+    try:
+        telegram.enviar_texto(mensagem)
+    except TelegramError as exc:
+        LOGGER.error("Falha ao enviar o relatório: %s", exc)
+        return 1
+
+    LOGGER.info("Relatório enviado (%d perfil(ns)).", len(frescos))
+    return 0
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     args = parse_args(argv)
     logging.basicConfig(
@@ -362,6 +485,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
 
     load_dotenv()
+
+    if args.relatorio:
+        return enviar_relatorio(args.estado or ".state/seen.json")
 
     telegram = Telegram(
         token=os.getenv("TELEGRAM_BOT_TOKEN"),
@@ -421,6 +547,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
 
     api = DOEAPI()
+    perfil = cfg.get("perfil") or Path(args.config).stem
+    janela = f"{inicio:%d/%m/%Y} a {fim:%d/%m/%Y}"
     LOGGER.info(
         "Janela de busca: %s a %s",
         inicio.strftime("%d/%m/%Y"),
@@ -435,7 +563,23 @@ def main(argv: Optional[list[str]] = None) -> int:
         )
 
     todas, falhas_busca, bloqueado = coletar(api, cfg, inicio, fim)
+    arquivo_estado = estado_cfg.get("arquivo", ".state/seen.json")
+
     if not todas:
+        if not args.dry_run:
+            registrar_resumo(
+                arquivo_estado,
+                perfil,
+                {
+                    "janela": janela,
+                    "encontradas": 0,
+                    "apos_filtro": 0,
+                    "novas": 0,
+                    "enviadas": 0,
+                    "erros": 0,
+                    "falhas": falhas_busca,
+                },
+            )
         if bloqueado or (falhas_busca and falhas_busca == len(cfg.get("buscas") or [])):
             LOGGER.error("Nenhum resultado: todas as buscas falharam ou foram bloqueadas.")
             return 1
@@ -604,6 +748,20 @@ def main(argv: Optional[list[str]] = None) -> int:
             len(novas),
         )
         return 0
+
+    registrar_resumo(
+        arquivo_estado,
+        perfil,
+        {
+            "janela": janela,
+            "encontradas": len(todas),
+            "apos_filtro": len(candidatas),
+            "novas": len(novas),
+            "enviadas": enviados,
+            "erros": erros,
+            "falhas": falhas_busca,
+        },
+    )
 
     LOGGER.info(
         "Resumo final: %d enviada(s), %d erro(s), %d já vista(s), %d acima do limite.",

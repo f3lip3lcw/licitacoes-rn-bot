@@ -3,6 +3,9 @@
 # Diário Oficial do RN: código 121 (DEI/RN). A busca usa a API pública da
 # "Busca Avançada": https://deirn.sdoe.com.br/diariooficialweb/#/busca-avancada?diario=MTIx
 
+# Nome que aparece no relatório do Telegram.
+perfil: "SEAD geral"
+
 diario:
   codigo: 121
   nome: "DOE-RN"
