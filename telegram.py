@@ -57,6 +57,9 @@ class Telegram:
 
                 if resposta.status_code == 429:
                     espera = int(resposta.headers.get("Retry-After", "5"))
+                    ultimo_erro = TelegramError(
+                        f"HTTP 429: limite de mensagens, espere {espera}s"
+                    )
                     LOGGER.warning("Telegram pediu para aguardar %ss", espera)
                     time.sleep(espera)
                     continue
